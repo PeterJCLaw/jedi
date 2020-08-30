@@ -429,6 +429,9 @@ class NewType(Value):
         from jedi.inference.compiled.value import CompiledValueName
         return CompiledValueName(self, 'NewType')
 
+    def __repr__(self) -> str:
+        return '<NewType: %s>%s' % (self.tree_node, self._type_value_set)
+
 
 class CastFunction(BaseTypingValue):
     @repack_with_argument_clinic('type, object, /')
