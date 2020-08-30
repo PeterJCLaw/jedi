@@ -136,6 +136,9 @@ class Script:
                 stacklevel=2
             )
         if code is None:
+            if path is None:
+                raise ValueError("Must provide at least one of code or path")
+
             # TODO add a better warning than the traceback!
             with open(path, 'rb') as f:
                 code = f.read()
