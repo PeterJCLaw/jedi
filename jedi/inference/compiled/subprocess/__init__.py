@@ -16,15 +16,19 @@ import traceback
 import weakref
 from functools import partial
 from threading import Thread
+from typing import Any, cast, Deque, Dict, Callable, Mapping, Optional, \
+    Tuple, TypeVar
 
 from jedi._compatibility import pickle_dump, pickle_load
 from jedi import debug
 from jedi.cache import memoize_method
+from jedi.inference import InferenceState
 from jedi.inference.compiled.subprocess import functions
 from jedi.inference.compiled.access import DirectObjectAccess, AccessPath, \
     SignatureParam
 from jedi.api.exceptions import InternalError
 
+R = TypeVar('R')
 
 _MAIN_PATH = os.path.join(os.path.dirname(__file__), '__main__.py')
 PICKLE_PROTOCOL = 4
@@ -83,12 +87,12 @@ def _cleanup_process(process, thread):
 
 
 class _InferenceStateProcess:
-    def __init__(self, inference_state):
+    def __init__(self, inference_state: InferenceState) -> None:
         self._inference_state_weakref = weakref.ref(inference_state)
         self._inference_state_id = id(inference_state)
-        self._handles = {}
+        self._handles: Dict[int, AccessHandle] = {}
 
-    def get_or_create_access_handle(self, obj):
+    def get_or_create_access_handle(self, obj: object) -> 'AccessHandle':
         id_ = id(obj)
         try:
             return self.get_access_handle(id_)
@@ -98,10 +102,10 @@ class _InferenceStateProcess:
             self.set_access_handle(handle)
             return handle
 
-    def get_access_handle(self, id_):
+    def get_access_handle(self, id_: int) -> 'AccessHandle':
         return self._handles[id_]
 
-    def set_access_handle(self, handle):
+    def set_access_handle(self, handle: 'AccessHandle') -> None:
         self._handles[handle.id] = handle
 
 
@@ -116,7 +120,7 @@ class InferenceStateSameProcess(_InferenceStateProcess):
 
 
 class InferenceStateSubprocess(_InferenceStateProcess):
-    def __init__(self, inference_state, compiled_subprocess):
+    def __init__(self, inference_state: InferenceState, compiled_subprocess: 'CompiledSubprocess') -> None:
         super().__init__(inference_state)
         self._used = False
         self._compiled_subprocess = compiled_subprocess
@@ -166,13 +170,13 @@ class InferenceStateSubprocess(_InferenceStateProcess):
 class CompiledSubprocess:
     is_crashed = False
 
-    def __init__(self, executable, env_vars=None):
+    def __init__(self, executable: str, env_vars: Mapping[str, str] = None) -> None:
         self._executable = executable
         self._env_vars = env_vars
-        self._inference_state_deletion_queue = collections.deque()
+        self._inference_state_deletion_queue: Deque[int] = collections.deque()
         self._cleanup_callable = lambda: None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         pid = os.getpid()
         return '<%s _executable=%r, is_crashed=%r, pid=%r>' % (
             self.__class__.__name__,
@@ -233,7 +237,13 @@ class CompiledSubprocess:
         self.is_crashed = True
         self._cleanup_callable()
 
-    def _send(self, inference_state_id, function, args=(), kwargs={}):
+    def _send(
+        self,
+        inference_state_id: int,
+        function: Optional[Callable[..., R]],
+        args: Tuple[Any, ...]=(),
+        kwargs: Dict[Any, Any]={},
+    ) -> R:
         if self.is_crashed:
             raise InternalError("The subprocess %s has crashed." % self._executable)
 
@@ -268,9 +278,9 @@ class CompiledSubprocess:
             # way more informative.
             result.args = (traceback,)
             raise result
-        return result
+        return cast(R, result)
 
-    def delete_inference_state(self, inference_state_id):
+    def delete_inference_state(self, inference_state_id: int) -> None:
         """
         Currently we are not deleting inference_state instantly. They only get
         deleted once the subprocess is used again. It would probably a better

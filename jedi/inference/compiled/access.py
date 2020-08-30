@@ -9,8 +9,9 @@ import re
 import builtins
 import typing
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
+from jedi.inference import InferenceState
 from jedi.inference.compiled.getattr_static import getattr_static
 
 ALLOWED_GETITEM_TYPES = (str, list, tuple, bytes, bytearray, dict)
@@ -147,7 +148,7 @@ class AccessPath:
         self.accesses = accesses
 
 
-def create_access_path(inference_state, obj):
+def create_access_path(inference_state: InferenceState, obj: object) -> AccessPath:
     access = create_access(inference_state, obj)
     return AccessPath(access.get_access_path_tuples())
 
@@ -165,7 +166,7 @@ def get_api_type(obj):
 
 
 class DirectObjectAccess:
-    def __init__(self, inference_state, obj):
+    def __init__(self, inference_state: InferenceState, obj: object):
         self._inference_state = inference_state
         self._obj = obj
 
@@ -175,7 +176,7 @@ class DirectObjectAccess:
     def _create_access(self, obj):
         return create_access(self._inference_state, obj)
 
-    def _create_access_path(self, obj):
+    def _create_access_path(self, obj: object) -> AccessPath:
         return create_access_path(self._inference_state, obj)
 
     def py__bool__(self):
@@ -446,12 +447,9 @@ class DirectObjectAccess:
         op = _OPERATORS[operator]
         return self._create_access_path(op(self._obj, other_access._obj))
 
-    def get_annotation_name_and_args(self):
-        """
-        Returns Tuple[Optional[str], Tuple[AccessPath, ...]]
-        """
+    def get_annotation_name_and_args(self) -> Tuple[Optional[str], Tuple[AccessPath, ...]]:
         name = None
-        args = ()
+        args: Tuple[object, ...] = ()
         if safe_getattr(self._obj, '__module__', default='') == 'typing':
             m = re.match(r'typing.(\w+)\[', repr(self._obj))
             if m is not None:

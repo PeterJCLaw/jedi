@@ -10,12 +10,16 @@ be used across repositories.
 import json
 from pathlib import Path
 from itertools import chain
+from typing import Iterable, Iterator, List, Optional, Union
+
+from parso.python import tree
 
 from jedi import debug
-from jedi.api.environment import get_cached_default_environment, create_environment
+from jedi.api.environment import Environment, SameEnvironment, get_cached_default_environment, create_environment
 from jedi.api.exceptions import WrongVersion
 from jedi.api.completion import search_in_module
 from jedi.api.helpers import split_search_string, get_module_names
+from jedi.inference import InferenceState
 from jedi.inference.imports import load_module_from_path, \
     load_namespace_from_path, iter_module_names
 from jedi.inference.sys_path import discover_buildout_paths
@@ -47,7 +51,7 @@ def _try_to_skip_duplicates(func):
     return wrapper
 
 
-def _remove_duplicates_from_path(path):
+def _remove_duplicates_from_path(path: List[str]) -> Iterator[str]:
     used = set()
     for p in path:
         if p in used:
@@ -62,18 +66,18 @@ class Project:
     import resolution. It is mostly used as a parameter to :class:`.Script`.
     Additionally there are functions to search a whole project.
     """
-    _environment = None
+    _environment: Optional[Environment] = None
 
     @staticmethod
-    def _get_config_folder_path(base_path):
+    def _get_config_folder_path(base_path: Path) -> Path:
         return base_path.joinpath(_CONFIG_FOLDER)
 
     @staticmethod
-    def _get_json_path(base_path):
+    def _get_json_path(base_path: Path) -> Path:
         return Project._get_config_folder_path(base_path).joinpath('project.json')
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path: Union[Path, str]) -> 'Project':
         """
         Loads a project from a specific path. You should not provide the path
         to ``.jedi/project.json``, but rather the path to the project folder.
@@ -92,7 +96,7 @@ class Project:
                 "The Jedi version of this project seems newer than what we can handle."
             )
 
-    def save(self):
+    def save(self) -> None:
         """
         Saves the project configuration in the project in ``.jedi/project.json``.
         """
@@ -108,13 +112,13 @@ class Project:
 
     def __init__(
         self,
-        path,
+        path: Union[Path, str],
         *,
-        environment_path=None,
-        load_unsafe_extensions=False,
-        sys_path=None,
-        added_sys_path=(),
-        smart_sys_path=True,
+        environment_path: Optional[str] = None,
+        load_unsafe_extensions: bool = False,
+        sys_path: Optional[Iterable[Union[Path, str]]] = None,
+        added_sys_path: Iterable[Union[Path, str]] = (),
+        smart_sys_path: bool = True,
     ) -> None:
         """
         :param path: The base path for this project.
@@ -140,10 +144,13 @@ class Project:
         self._path = path
 
         self._environment_path = environment_path
+
         if sys_path is not None:
             # Remap potential pathlib.Path entries
-            sys_path = list(map(str, sys_path))
-        self._sys_path = sys_path
+            self._sys_path: Optional[List[str]] = list(map(str, sys_path))
+        else:
+            self._sys_path = None
+
         self._smart_sys_path = smart_sys_path
         self._load_unsafe_extensions = load_unsafe_extensions
         self._django = False
@@ -152,14 +159,14 @@ class Project:
         """The sys path that is going to be added at the end of the """
 
     @property
-    def path(self):
+    def path(self) -> Path:
         """
         The base path for this project.
         """
         return self._path
 
     @property
-    def sys_path(self):
+    def sys_path(self) -> Optional[List[str]]:
         """
         The sys path provided to this project. This can be None and in that
         case will be auto generated.
@@ -167,7 +174,7 @@ class Project:
         return self._sys_path
 
     @property
-    def smart_sys_path(self):
+    def smart_sys_path(self) -> bool:
         """
         If the sys path is going to be calculated in a smart way, where
         additional paths are added.
@@ -175,14 +182,14 @@ class Project:
         return self._smart_sys_path
 
     @property
-    def load_unsafe_extensions(self):
+    def load_unsafe_extensions(self) -> bool:
         """
         Wheter the project loads unsafe extensions.
         """
         return self._load_unsafe_extensions
 
     @inference_state_as_method_param_cache()
-    def _get_base_sys_path(self, inference_state):
+    def _get_base_sys_path(self, inference_state: InferenceState) -> List[str]:
         # The sys path has not been set explicitly.
         sys_path = list(inference_state.environment.get_sys_path())
         try:
@@ -192,7 +199,12 @@ class Project:
         return sys_path
 
     @inference_state_as_method_param_cache()
-    def _get_sys_path(self, inference_state, add_parent_paths=True, add_init_paths=False):
+    def _get_sys_path(
+        self,
+        inference_state: InferenceState,
+        add_parent_paths: bool = True,
+        add_init_paths: bool = False,
+    ) -> List[str]:
         """
         Keep this method private for all users of jedi. However internally this
         one is used like a public method.
@@ -239,7 +251,7 @@ class Project:
         path = prefixed + sys_path + suffixed
         return list(_remove_duplicates_from_path(path))
 
-    def get_environment(self):
+    def get_environment(self) -> SameEnvironment:
         if self._environment is None:
             if self._environment_path is not None:
                 self._environment = create_environment(self._environment_path, safe=False)
@@ -366,18 +378,18 @@ class Project:
             convert=True,
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '<%s: %s>' % (self.__class__.__name__, self._path)
 
 
-def _is_potential_project(path):
+def _is_potential_project(path: Path) -> bool:
     for name in _CONTAINS_POTENTIAL_PROJECT:
         if path.joinpath(name).exists():
             return True
     return False
 
 
-def _is_django_path(directory):
+def _is_django_path(directory: Path) -> bool:
     """ Detects the path of the very well known Django library (if used) """
     try:
         with open(directory.joinpath('manage.py'), 'rb') as f:
@@ -386,7 +398,7 @@ def _is_django_path(directory):
         return False
 
 
-def get_default_project(path=None):
+def get_default_project(path: Union[Path, str, None] = None) -> Project:
     """
     If a project is not defined by the user, Jedi tries to define a project by
     itself as well as possible. Jedi traverses folders until it finds one of
@@ -402,7 +414,7 @@ def get_default_project(path=None):
         path = Path(path)
 
     check = path.absolute()
-    probable_path = None
+    probable_path: Optional[Path] = None
     first_no_init_file = None
     for dir in chain([check], check.parents):
         try:
@@ -439,7 +451,7 @@ def get_default_project(path=None):
     return Project(curdir)
 
 
-def _remove_imports(names):
+def _remove_imports(names: Iterable[tree.Name]) -> List[tree.Name]:
     return [
         n for n in names
         if n.tree_name is None or n.api_type != 'module'

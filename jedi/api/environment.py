@@ -8,6 +8,8 @@ import hashlib
 import filecmp
 from collections import namedtuple
 from shutil import which
+from pathlib import Path
+from typing import Generator, List, Mapping, Optional, Union
 
 from jedi.cache import memoize_method, time_cache
 from jedi.inference.compiled.subprocess import CompiledSubprocess, \
@@ -59,15 +61,15 @@ class Environment(_BaseEnvironment):
     should not create it directly. Please use create_environment or the other
     functions instead. It is then returned by that function.
     """
-    _subprocess = None
+    _subprocess: Optional[CompiledSubprocess] = None
 
-    def __init__(self, executable, env_vars=None):
+    def __init__(self, executable: str, env_vars: Optional[Mapping[str, str]] = None) -> None:
         self._start_executable = executable
         self._env_vars = env_vars
         # Initialize the environment
         self._get_subprocess()
 
-    def _get_subprocess(self):
+    def _get_subprocess(self) -> CompiledSubprocess:
         if self._subprocess is not None and not self._subprocess.is_crashed:
             return self._subprocess
 
@@ -98,7 +100,7 @@ class Environment(_BaseEnvironment):
         """
         return self._subprocess
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         version = '.'.join(str(i) for i in self.version_info)
         return '<%s: %s in %s>' % (self.__class__.__name__, version, self.path)
 
@@ -106,12 +108,10 @@ class Environment(_BaseEnvironment):
         return InferenceStateSubprocess(inference_state, self._get_subprocess())
 
     @memoize_method
-    def get_sys_path(self):
+    def get_sys_path(self) -> List[str]:
         """
         The sys path for this environment. Does not include potential
         modifications from e.g. appending to :data:`sys.path`.
-
-        :returns: list of str
         """
         # It's pretty much impossible to generate the sys path without actually
         # executing Python. The sys path (when starting with -S) itself depends
@@ -141,7 +141,7 @@ class InterpreterEnvironment(_SameEnvironmentMixin, _BaseEnvironment):
         return sys.path
 
 
-def _get_virtual_env_from_var(env_var='VIRTUAL_ENV'):
+def _get_virtual_env_from_var(env_var: str = 'VIRTUAL_ENV') -> Optional[_BaseEnvironment]:
     """Get virtualenv environment from VIRTUAL_ENV environment variable.
 
     It uses `safe=False` with ``create_environment``, because the environment
@@ -161,6 +161,8 @@ def _get_virtual_env_from_var(env_var='VIRTUAL_ENV'):
         except InvalidPythonEnvironment:
             pass
 
+    return None
+
 
 def _calculate_sha256_for_file(path):
     sha256 = hashlib.sha256()
@@ -170,15 +172,13 @@ def _calculate_sha256_for_file(path):
     return sha256.hexdigest()
 
 
-def get_default_environment():
+def get_default_environment() -> _BaseEnvironment:
     """
     Tries to return an active Virtualenv or conda environment.
     If there is no VIRTUAL_ENV variable or no CONDA_PREFIX variable set
     set it will return the latest Python version installed on the system. This
     makes it possible to use as many new Python features as possible when using
     autocompletion and other functionality.
-
-    :returns: :class:`.Environment`
     """
     virtual_env = _get_virtual_env_from_var()
     if virtual_env is not None:
@@ -191,7 +191,7 @@ def get_default_environment():
     return _try_get_same_env()
 
 
-def _try_get_same_env():
+def _try_get_same_env() -> _BaseEnvironment:
     env = SameEnvironment()
     if not os.path.basename(env.executable).lower().startswith('python'):
         # This tries to counter issues with embedding. In some cases (e.g.
@@ -311,7 +311,10 @@ def find_virtualenvs(paths=None, *, safe=True, use_environment_vars=True):
                 pass
 
 
-def find_system_environments(*, env_vars=None):
+def find_system_environments(
+    *,
+    env_vars: Optional[Mapping[str, str]] = None
+) -> Generator[Environment, None, None]:
     """
     Ignores virtualenvs and returns the Python versions that were installed on
     your system. This might return nothing, if you're running Python e.g. from
@@ -330,7 +333,11 @@ def find_system_environments(*, env_vars=None):
 
 # TODO: this function should probably return a list of environments since
 # multiple Python installations can be found on a system for the same version.
-def get_system_environment(version, *, env_vars=None):
+def get_system_environment(
+    version: str,
+    *,
+    env_vars: Optional[Mapping[str, str]] = None
+) -> Environment:
     """
     Return the first Python environment found for a string of the form 'X.Y'
     where X and Y are the major and minor versions of Python.
@@ -353,7 +360,12 @@ def get_system_environment(version, *, env_vars=None):
     raise InvalidPythonEnvironment("Cannot find executable python%s." % version)
 
 
-def create_environment(path, *, safe=True, env_vars=None):
+def create_environment(
+    path: str,
+    *,
+    safe: bool = True,
+    env_vars: Optional[Mapping[str, str]] = None
+) -> Environment:
     """
     Make it possible to manually create an Environment object by specifying a
     Virtualenv path or an executable path and optional environment variables.
@@ -367,7 +379,7 @@ def create_environment(path, *, safe=True, env_vars=None):
     return Environment(_get_executable_path(path, safe=safe), env_vars=env_vars)
 
 
-def _get_executable_path(path, safe=True):
+def _get_executable_path(path: str, safe: bool = True) -> str:
     """
     Returns None if it's not actually a virtual env.
     """
@@ -383,7 +395,7 @@ def _get_executable_path(path, safe=True):
     return python
 
 
-def _get_executables_from_windows_registry(version):
+def _get_executables_from_windows_registry(version: str) -> Generator[str, None, None]:
     # https://github.com/python/typeshed/pull/3794 adds winreg
     import winreg  # type: ignore[import]
 
@@ -407,13 +419,13 @@ def _get_executables_from_windows_registry(version):
                 pass
 
 
-def _assert_safe(executable_path, safe):
+def _assert_safe(executable_path: str, safe: bool):
     if safe and not _is_safe(executable_path):
         raise InvalidPythonEnvironment(
             "The python binary is potentially unsafe.")
 
 
-def _is_safe(executable_path):
+def _is_safe(executable_path: str) -> bool:
     # Resolve sym links. A venv typically is a symlink to a known Python
     # binary. Only virtualenvs copy symlinks around.
     real_path = os.path.realpath(executable_path)
@@ -441,7 +453,7 @@ def _is_safe(executable_path):
     return False
 
 
-def _is_unix_safe_simple(real_path):
+def _is_unix_safe_simple(real_path: str) -> bool:
     if _is_unix_admin():
         # In case we are root, just be conservative and
         # only execute known paths.
@@ -460,7 +472,7 @@ def _is_unix_safe_simple(real_path):
     return uid == 0
 
 
-def _is_unix_admin():
+def _is_unix_admin() -> bool:
     try:
         return os.getuid() == 0
     except AttributeError:

@@ -1,12 +1,14 @@
 import os
 import time
 from contextlib import contextmanager
-from typing import Callable, Optional
+from typing import Any, cast, Callable, Generator, Optional, TypeVar
+
+TCallable = TypeVar('TCallable', bound=Callable[..., Any])
 
 _inited = False
 
 
-def _lazy_colorama_init():
+def _lazy_colorama_init() -> None:
     """
     Lazily init colorama if necessary, not to screw up stdout if debugging is
     not enabled.
@@ -24,7 +26,7 @@ try:
         from colorama import Fore, init  # type: ignore[import]
         from colorama import initialise
 
-        def _lazy_colorama_init():  # noqa: F811
+        def _lazy_colorama_init() -> None:  # noqa: F811
             """
             Lazily init colorama if necessary, not to screw up stdout is
             debug not enabled.
@@ -68,22 +70,25 @@ _debug_indent = 0
 _start_time = time.time()
 
 
-def reset_time():
+def reset_time() -> None:
     global _start_time, _debug_indent
     _start_time = time.time()
     _debug_indent = 0
 
 
-def increase_indent(func):
+def increase_indent(func: TCallable) -> TCallable:
     """Decorator for makin """
     def wrapper(*args, **kwargs):
         with increase_indent_cm():
             return func(*args, **kwargs)
-    return wrapper
+    return cast(TCallable, wrapper)
 
 
 @contextmanager
-def increase_indent_cm(title=None, color='MAGENTA'):
+def increase_indent_cm(
+    title: Optional[str] = None,
+    color: str = 'MAGENTA',
+) -> Generator[None, None, None]:
     global _debug_indent
     if title:
         dbg('Start: ' + title, color=color)
@@ -96,7 +101,7 @@ def increase_indent_cm(title=None, color='MAGENTA'):
             dbg('End: ' + title, color=color)
 
 
-def dbg(message, *args, color='GREEN'):
+def dbg(message: str, *args: object, color: str = 'GREEN') -> None:
     """ Looks at the stack, to see if a debug message should be printed. """
     assert color
 
@@ -106,7 +111,7 @@ def dbg(message, *args, color='GREEN'):
         debug_function(color, i + 'dbg: ' + message % tuple(repr(a) for a in args))
 
 
-def warning(message, *args, format=True):
+def warning(message: str, *args: object, format: bool = True):
     if debug_function and enable_warning:
         i = ' ' * _debug_indent
         if format:
@@ -114,14 +119,14 @@ def warning(message, *args, format=True):
         debug_function('RED', i + 'warning: ' + message)
 
 
-def speed(name):
+def speed(name: str) -> None:
     if debug_function and enable_speed:
         now = time.time()
         i = ' ' * _debug_indent
         debug_function('YELLOW', i + 'speed: ' + '%s %s' % (name, now - _start_time))
 
 
-def print_to_stdout(color, str_out):
+def print_to_stdout(color: str, str_out: str) -> None:
     """
     The default debug function that prints to standard out.
 

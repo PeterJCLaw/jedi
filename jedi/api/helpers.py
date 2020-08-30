@@ -7,11 +7,18 @@ from textwrap import dedent
 from itertools import chain
 from functools import wraps
 from inspect import Parameter
+from typing import Any, Iterable, List, Optional, Tuple, Union
 
+from parso.grammar import PythonGrammar
+from parso.parser import Stack
 from parso.python.parser import Parser
 from parso.python import tree
+from parso.tree import Leaf, NodeOrLeaf
 
-from jedi.inference.base_value import NO_VALUES
+from jedi.api import classes
+from jedi.inference import InferenceState
+from jedi.inference.base_value import ValueSet, NO_VALUES
+from jedi.inference.context import ModuleContext
 from jedi.inference.syntax_tree import infer_atom
 from jedi.inference.helpers import infer_call_of_leaf
 from jedi.inference.compiled import get_string_value_set
@@ -22,11 +29,11 @@ from jedi.parser_utils import get_parent_scope
 CompletionParts = namedtuple('CompletionParts', ['path', 'has_dot', 'name'])
 
 
-def _start_match(string, like_name):
+def _start_match(string: str, like_name: str) -> bool:
     return string.startswith(like_name)
 
 
-def _fuzzy_match(string, like_name):
+def _fuzzy_match(string: str, like_name: str) -> bool:
     if len(like_name) <= 1:
         return like_name in string
     pos = string.find(like_name[0])
@@ -35,14 +42,14 @@ def _fuzzy_match(string, like_name):
     return False
 
 
-def match(string, like_name, fuzzy=False):
+def match(string: str, like_name: str, fuzzy: bool = False) -> bool:
     if fuzzy:
         return _fuzzy_match(string, like_name)
     else:
         return _start_match(string, like_name)
 
 
-def sorted_definitions(defs):
+def sorted_definitions(defs: Iterable[classes.Name]) -> List[classes.Name]:
     # Note: `or ''` below is required because `module_path` could be
     return sorted(defs, key=lambda x: (str(x.module_path or ''),
                                        x.line or 0,
@@ -50,8 +57,12 @@ def sorted_definitions(defs):
                                        x.name))
 
 
-def get_on_completion_name(module_node, lines, position):
-    leaf = module_node.get_leaf_for_position(position)
+def get_on_completion_name(
+    module_node: tree.Module,
+    lines: List[str],
+    position: Tuple[int, int],
+) -> str:
+    leaf: Optional[Leaf] = module_node.get_leaf_for_position(position)
     if leaf is None or leaf.type in ('string', 'error_leaf'):
         # Completions inside strings are a bit special, we need to parse the
         # string. The same is true for comments and error_leafs.
@@ -64,7 +75,7 @@ def get_on_completion_name(module_node, lines, position):
     return leaf.value[:position[1] - leaf.start_pos[1]]
 
 
-def _get_code(code_lines, start_pos, end_pos):
+def _get_code(code_lines: List[str], start_pos: Tuple[int, int], end_pos: Tuple[int, int]) -> str:
     # Get relevant lines.
     lines = code_lines[start_pos[0] - 1:end_pos[0]]
     # Remove the parts at the end of the line.
@@ -80,7 +91,7 @@ class OnErrorLeaf(Exception):
         return self.args[0]
 
 
-def _get_code_for_stack(code_lines, leaf, position):
+def _get_code_for_stack(code_lines: List[str], leaf: Leaf, position: Tuple[int, int]) -> str:
     # It might happen that we're on whitespace or on a comment. This means
     # that we would not get the right leaf.
     if leaf.start_pos >= position:
@@ -120,7 +131,12 @@ def _get_code_for_stack(code_lines, leaf, position):
         return _get_code(code_lines, user_stmt.get_start_pos_of_prefix(), position)
 
 
-def get_stack_at_position(grammar, code_lines, leaf, pos):
+def get_stack_at_position(
+    grammar: PythonGrammar,
+    code_lines: List[str],
+    leaf: Leaf,
+    pos: Tuple[int, int],
+) -> Stack:
     """
     Returns the possible node names (e.g. import_from, xor_test or yield_stmt).
     """
@@ -162,7 +178,11 @@ def get_stack_at_position(grammar, code_lines, leaf, pos):
     )
 
 
-def infer(inference_state, context, leaf):
+def infer(
+    inference_state: InferenceState,
+    context: ModuleContext,
+    leaf: Union[tree.Name, tree.Operator],
+) -> ValueSet:
     if leaf.type == 'name':
         return inference_state.infer(context, leaf)
 
@@ -204,7 +224,12 @@ def filter_follow_imports(names, follow_builtin_imports=False):
 
 
 class CallDetails:
-    def __init__(self, bracket_leaf, children, position):
+    def __init__(
+        self,
+        bracket_leaf: Leaf,
+        children: List[NodeOrLeaf],
+        position: Tuple[int, int],
+    ) -> None:
         self.bracket_leaf = bracket_leaf
         self._children = children
         self._position = position
@@ -374,7 +399,11 @@ def _get_index_and_key(nodes, position):
     return nodes_before.count(','), key_str
 
 
-def _get_signature_details_from_error_node(node, additional_children, position):
+def _get_signature_details_from_error_node(
+    node: tree.PythonErrorNode,
+    additional_children: List[Any],
+    position: Tuple[int, int],
+) -> Optional[CallDetails]:
     for index, element in reversed(list(enumerate(node.children))):
         # `index > 0` means that it's a trailer and not an atom.
         if element == '(' and element.end_pos <= position and index > 0:
@@ -387,9 +416,11 @@ def _get_signature_details_from_error_node(node, additional_children, position):
             if name.type == 'name' or name.parent.type in ('trailer', 'atom'):
                 return CallDetails(element, children + additional_children, position)
 
+    return None
 
-def get_signature_details(module, position):
-    leaf = module.get_leaf_for_position(position, include_prefixes=True)
+
+def get_signature_details(module: tree.Module, position: Tuple[int, int]) -> Optional[CallDetails]:
+    leaf: Leaf = module.get_leaf_for_position(position, include_prefixes=True)
     # It's easier to deal with the previous token than the next one in this
     # case.
     if leaf.start_pos >= position:
@@ -407,7 +438,7 @@ def get_signature_details(module, position):
             # makes it feel strange to have a signature.
             return None
 
-        additional_children = []
+        additional_children: List[NodeOrLeaf] = []
         for n in reversed(node.children):
             if n.start_pos < position:
                 if n.type == 'error_node':
@@ -488,12 +519,17 @@ def validate_line_column(func):
     return wrapper
 
 
-def get_module_names(module, all_scopes, definitions=True, references=False):
+def get_module_names(
+    module: tree.Module,
+    all_scopes: bool,
+    definitions: bool = True,
+    references: bool = False,
+) -> Iterable[tree.Name]:
     """
     Returns a dictionary with name parts as keys and their call paths as
     values.
     """
-    def def_ref_filter(name):
+    def def_ref_filter(name: tree.Name):
         is_def = name.is_definition()
         return definitions and is_def or references and not is_def
 
@@ -504,7 +540,7 @@ def get_module_names(module, all_scopes, definitions=True, references=False):
         # node have the parent module and not suite as all the others.
         # Therefore it's important to catch that case.
 
-        def is_module_scope_name(name):
+        def is_module_scope_name(name: tree.Name):
             parent_scope = get_parent_scope(name)
             # async functions have an extra wrapper. Strip it.
             if parent_scope and parent_scope.type == 'async_stmt':
@@ -515,7 +551,7 @@ def get_module_names(module, all_scopes, definitions=True, references=False):
     return filter(def_ref_filter, names)
 
 
-def split_search_string(name):
+def split_search_string(name: str) -> Tuple[str, List[str]]:
     type, _, dotted_names = name.rpartition(' ')
     if type == 'def':
         type = 'function'

@@ -8,7 +8,8 @@ from parso.python.tree import Name
 
 from jedi.inference.filters import ParserTreeFilter, MergedFilter, \
     GlobalNameFilter
-from jedi.inference.names import AnonymousParamName, TreeNameDefinition
+from jedi.inference.names import AbstractTreeName, AnonymousParamName, \
+    TreeNameDefinition
 from jedi.inference.base_value import NO_VALUES, ValueSet
 from jedi.parser_utils import get_parent_scope
 from jedi import debug
@@ -288,7 +289,7 @@ class TreeContextMixin:
                     scope_node = parent_scope(scope_node)
         return from_scope_node(scope_node, is_nested=True)
 
-    def create_name(self, tree_name):
+    def create_name(self, tree_name: Name) -> AbstractTreeName:
         definition = tree_name.get_definition()
         if definition and definition.type == 'param' and definition.name == tree_name:
             funcdef = search_ancestor(definition, 'funcdef', 'lambdef')

@@ -11,12 +11,13 @@ from jedi import debug
 from jedi.inference.utils import to_list
 from jedi._compatibility import cast_path
 from jedi.cache import memoize_method
+from jedi.inference import InferenceState
 from jedi.inference.filters import AbstractFilter
 from jedi.inference.names import AbstractNameDefinition, ValueNameMixin, \
     ParamNameInterface
 from jedi.inference.base_value import Value, ValueSet, NO_VALUES
 from jedi.inference.lazy_value import LazyKnownValue
-from jedi.inference.compiled.access import _sentinel
+from jedi.inference.compiled.access import AccessPath, _sentinel
 from jedi.inference.cache import inference_state_function_cache
 from jedi.inference.helpers import reraise_getitem_errors
 from jedi.inference.signature import BuiltinSignature
@@ -594,8 +595,8 @@ def _normalize_create_args(func):
     return wrapper
 
 
-def create_from_access_path(inference_state, access_path):
-    value = None
+def create_from_access_path(inference_state: InferenceState, access_path: AccessPath) -> Optional[CompiledValue]:
+    value: Optional[CompiledValue] = None
     for name, access in access_path.accesses:
         value = create_cached_compiled_value(
             inference_state,

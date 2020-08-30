@@ -2,16 +2,20 @@
 TODO Some parts of this module are still not well documented.
 """
 
-from jedi.inference import compiled
+from jedi.inference import InferenceState, compiled
 from jedi.inference.base_value import ValueSet
 from jedi.inference.filters import ParserTreeFilter, MergedFilter
 from jedi.inference.names import TreeNameDefinition
 from jedi.inference.compiled import mixed
 from jedi.inference.compiled.access import create_access_path
 from jedi.inference.context import ModuleContext
+from jedi.inference.compiled.mixed import MixedObject
+from jedi.inference.compiled.value import CompiledValue
+from parso.python.tree import Name
+from typing import Iterator, Optional, Tuple
 
 
-def _create(inference_state, obj):
+def _create(inference_state: InferenceState, obj: 'NamespaceObject') -> CompiledValue:
     return compiled.create_from_access_path(
         inference_state, create_access_path(inference_state, obj)
     )
@@ -54,13 +58,13 @@ class MixedModuleContext(ModuleContext):
             ) for n in namespaces
         ]
 
-    def _get_mixed_object(self, compiled_value):
+    def _get_mixed_object(self, compiled_value: CompiledValue) -> MixedObject:
         return mixed.MixedObject(
             compiled_value=compiled_value,
             tree_value=self._value
         )
 
-    def get_filters(self, until_position=None, origin_scope=None):
+    def get_filters(self, until_position: Optional[Tuple[int, int]] = None, origin_scope: Optional[Name] = None) -> Iterator[MergedFilter]:
         yield MergedFilter(
             MixedParserTreeFilter(
                 parent_context=self,
