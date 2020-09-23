@@ -26,7 +26,7 @@ from jedi.api import helpers
 from jedi.api.helpers import validate_line_column
 from jedi.api.completion import Completion, search_in_module
 from jedi.api.keywords import KeywordName
-from jedi.api.environment import InterpreterEnvironment
+from jedi.api.environment import Environment, InterpreterEnvironment
 from jedi.api.project import get_default_project, Project
 from jedi.api.errors import parso_to_jedi_errors
 from jedi.api import refactoring
@@ -44,6 +44,11 @@ from jedi.inference.value.iterable import unpack_tuple_to_dict
 from jedi.inference.gradual.conversion import convert_names, convert_values
 from jedi.inference.gradual.utils import load_proper_stub_module
 from jedi.inference.utils import to_list
+from jedi.api.classes import Completion, Name, Signature
+from jedi.api.interpreter import MixedModuleContext
+from jedi.inference.context import ModuleContext
+from jedi.inference.value.module import ModuleValue
+from typing import Callable, List, Optional, Union
 
 # Jedi uses lots and lots of recursion. By setting this a little bit higher, we
 # can remove some "maximum recursion depth" errors.
@@ -105,8 +110,9 @@ class Script:
         references works well, because the right folder is searched. There are
         also ways to modify the sys path and other things.
     """
-    def __init__(self, code=None, line=None, column=None, path=None,
-                 sys_path=None, environment=None, project=None, source=None):
+
+    def __init__(self, code: Optional[str] = None, line: Optional[int] = None, column: Optional[int] = None, path: Optional[str] = None,
+                 sys_path: None = None, environment: Optional[Union[Environment, InterpreterEnvironment]] = None, project: Optional[Project] = None, source: None = None) -> None:
         self._orig_path = path
         # An empty path (also empty string) should always result in no path.
         if isinstance(path, str):
@@ -176,7 +182,7 @@ class Script:
     # Cache the module, this is mostly useful for testing, since this shouldn't
     # be called multiple times.
     @cache.memoize_method
-    def _get_module(self):
+    def _get_module(self) -> ModuleValue:
         names = None
         is_package = False
         if self.path is not None:
@@ -218,10 +224,10 @@ class Script:
             self._inference_state.module_cache.add(names, ValueSet([module]))
         return module
 
-    def _get_module_context(self):
+    def _get_module_context(self) -> ModuleContext:
         return self._get_module().as_context()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '<%s: %s %r>' % (
             self.__class__.__name__,
             repr(self._orig_path),
@@ -229,7 +235,8 @@ class Script:
         )
 
     @validate_line_column
-    def complete(self, line=None, column=None, *, fuzzy=False):
+    def complete(self, line: Optional[int] = None, column: Optional[int] = None, *,
+                 fuzzy=False) -> List[Completion]:
         """
         Completes objects under the cursor.
 
@@ -250,7 +257,7 @@ class Script:
             )
             return completion.complete()
 
-    def completions(self, fuzzy=False):
+    def completions(self, fuzzy: bool = False) -> List[Completion]:
         warnings.warn(
             "Deprecated since version 0.16.0. Use Script(...).complete instead.",
             DeprecationWarning,
@@ -259,7 +266,8 @@ class Script:
         return self.complete(*self._pos, fuzzy=fuzzy)
 
     @validate_line_column
-    def infer(self, line=None, column=None, *, only_stubs=False, prefer_stubs=False):
+    def infer(self, line: Optional[int] = None, column: Optional[int] = None, *,
+              only_stubs=False, prefer_stubs=False) -> List[Name]:
         """
         Return the definitions of under the cursor. It is basically a wrapper
         around Jedi's type inference.
@@ -297,7 +305,7 @@ class Script:
         # the API.
         return helpers.sorted_definitions(set(defs))
 
-    def goto_definitions(self, **kwargs):
+    def goto_definitions(self, **kwargs) -> List[Name]:
         warnings.warn(
             "Deprecated since version 0.16.0. Use Script(...).infer instead.",
             DeprecationWarning,
@@ -305,7 +313,8 @@ class Script:
         )
         return self.infer(*self._pos, **kwargs)
 
-    def goto_assignments(self, follow_imports=False, follow_builtin_imports=False, **kwargs):
+    def goto_assignments(self, follow_imports: bool = False, follow_builtin_imports: bool = False, **kwargs
+                         ) -> List[Name]:
         warnings.warn(
             "Deprecated since version 0.16.0. Use Script(...).goto instead.",
             DeprecationWarning,
@@ -317,8 +326,9 @@ class Script:
                          **kwargs)
 
     @validate_line_column
-    def goto(self, line=None, column=None, *, follow_imports=False, follow_builtin_imports=False,
-             only_stubs=False, prefer_stubs=False):
+    def goto(self, line: Optional[int] = None, column: Optional[int] = None, *,
+             follow_imports=False, follow_builtin_imports=False,
+             only_stubs=False, prefer_stubs=False) -> List[Name]:
         """
         Goes to the name that defined the object under the cursor. Optionally
         you can follow imports.
@@ -446,7 +456,7 @@ class Script:
                 return [classes.Name(self._inference_state, name)]
         return []
 
-    def usages(self, **kwargs):
+    def usages(self, **kwargs) -> List[Name]:
         warnings.warn(
             "Deprecated since version 0.16.0. Use Script(...).get_references instead.",
             DeprecationWarning,
@@ -455,7 +465,8 @@ class Script:
         return self.get_references(*self._pos, **kwargs)
 
     @validate_line_column
-    def get_references(self, line=None, column=None, **kwargs):
+    def get_references(self, line: Optional[int] = None, column: Optional[int] = None, **kwargs
+                       ) -> List[Name]:
         """
         Lists all references of a variable in a project. Since this can be
         quite hard to do for Jedi, if it is too complicated, Jedi will stop
@@ -484,7 +495,7 @@ class Script:
             return helpers.sorted_definitions(definitions)
         return _references(**kwargs)
 
-    def call_signatures(self):
+    def call_signatures(self) -> List[Signature]:
         warnings.warn(
             "Deprecated since version 0.16.0. Use Script(...).get_signatures instead.",
             DeprecationWarning,
@@ -493,7 +504,7 @@ class Script:
         return self.get_signatures(*self._pos)
 
     @validate_line_column
-    def get_signatures(self, line=None, column=None):
+    def get_signatures(self, line: Optional[int] = None, column: Optional[int] = None) -> List[Signature]:
         """
         Return the function object of the call under the cursor.
 
@@ -804,7 +815,7 @@ class Interpreter(Script):
         self._inference_state.allow_descriptor_getattr = self._allow_descriptor_getattr_default
 
     @cache.memoize_method
-    def _get_module_context(self):
+    def _get_module_context(self) -> MixedModuleContext:
         tree_module_value = ModuleValue(
             self._inference_state, self._module_node,
             file_io=KnownContentFileIO(str(self.path), self._code),
@@ -845,8 +856,8 @@ def preload_module(*modules):
         Script(s).complete(1, len(s))
 
 
-def set_debug_function(func_cb=debug.print_to_stdout, warnings=True,
-                       notices=True, speed=True):
+def set_debug_function(func_cb: Optional[Callable] = debug.print_to_stdout, warnings: bool = True,
+                       notices: bool = True, speed: bool = True) -> None:
     """
     Define a callback debug function to get all the debug messages.
 

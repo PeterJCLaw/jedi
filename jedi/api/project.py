@@ -8,11 +8,11 @@ Projects can be saved to disk and loaded again, to allow project definitions to
 be used across repositories.
 """
 import json
-from pathlib import Path
+from pathlib import PosixPath, Path
 from itertools import chain
 
 from jedi import debug
-from jedi.api.environment import get_cached_default_environment, create_environment
+from jedi.api.environment import SameEnvironment, get_cached_default_environment, create_environment
 from jedi.api.exceptions import WrongVersion
 from jedi.api.completion import search_in_module
 from jedi.api.helpers import split_search_string, get_module_names
@@ -22,6 +22,7 @@ from jedi.inference.sys_path import discover_buildout_paths
 from jedi.inference.cache import inference_state_as_method_param_cache
 from jedi.inference.references import recurse_find_python_folders_and_files, search_in_file_ios
 from jedi.file_io import FolderIO
+from typing import Iterator, List, Optional
 
 _CONFIG_FOLDER = '.jedi'
 _CONTAINS_POTENTIAL_PROJECT = \
@@ -47,7 +48,7 @@ def _try_to_skip_duplicates(func):
     return wrapper
 
 
-def _remove_duplicates_from_path(path):
+def _remove_duplicates_from_path(path: List[str]) -> Iterator[str]:
     used = set()
     for p in path:
         if p in used:
@@ -65,11 +66,11 @@ class Project:
     _environment = None
 
     @staticmethod
-    def _get_config_folder_path(base_path):
+    def _get_config_folder_path(base_path: PosixPath) -> PosixPath:
         return base_path.joinpath(_CONFIG_FOLDER)
 
     @staticmethod
-    def _get_json_path(base_path):
+    def _get_json_path(base_path: PosixPath) -> PosixPath:
         return Project._get_config_folder_path(base_path).joinpath('project.json')
 
     @classmethod
@@ -106,7 +107,7 @@ class Project:
         with open(self._get_json_path(self._path), 'w') as f:
             return json.dump((_SERIALIZER_VERSION, data), f)
 
-    def __init__(self, path, **kwargs):
+    def __init__(self, path: PosixPath, **kwargs) -> None:
         """
         :param path: The base path for this project.
         :param environment_path: The Python executable path, typically the path
@@ -233,7 +234,7 @@ class Project:
         path = prefixed + sys_path + suffixed
         return list(_remove_duplicates_from_path(path))
 
-    def get_environment(self):
+    def get_environment(self) -> SameEnvironment:
         if self._environment is None:
             if self._environment_path is not None:
                 self._environment = create_environment(self._environment_path, safe=False)
@@ -364,14 +365,14 @@ class Project:
         return '<%s: %s>' % (self.__class__.__name__, self._path)
 
 
-def _is_potential_project(path):
+def _is_potential_project(path: PosixPath) -> bool:
     for name in _CONTAINS_POTENTIAL_PROJECT:
         if path.joinpath(name).exists():
             return True
     return False
 
 
-def _is_django_path(directory):
+def _is_django_path(directory: PosixPath) -> bool:
     """ Detects the path of the very well known Django library (if used) """
     try:
         with open(directory.joinpath('manage.py'), 'rb') as f:
@@ -380,7 +381,7 @@ def _is_django_path(directory):
         return False
 
 
-def get_default_project(path=None):
+def get_default_project(path: Optional[PosixPath] = None) -> Project:
     """
     If a project is not defined by the user, Jedi tries to define a project by
     itself as well as possible. Jedi traverses folders until it finds one of

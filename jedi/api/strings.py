@@ -13,6 +13,10 @@ from jedi.inference.names import AbstractArbitraryName
 from jedi.inference.helpers import infer_call_of_leaf
 from jedi.api.classes import Completion
 from jedi.parser_utils import cut_value_at_position
+from jedi.api.interpreter import MixedModuleContext
+from jedi.inference.context import ModuleContext
+from parso.python.tree import Name
+from typing import Any, List, Tuple, Union
 
 _sentinel = object()
 
@@ -22,7 +26,7 @@ class StringName(AbstractArbitraryName):
     is_value_name = False
 
 
-def complete_dict(module_context, code_lines, leaf, position, string, fuzzy):
+def complete_dict(module_context: Union[MixedModuleContext, ModuleContext], code_lines: List[str], leaf: Name, position: Tuple[int, int], string: None, fuzzy: bool) -> List[Any]:
     bracket_leaf = leaf
     if bracket_leaf != '[':
         bracket_leaf = leaf.get_previous_leaf()
