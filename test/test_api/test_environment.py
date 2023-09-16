@@ -108,11 +108,15 @@ def test_scanning_venvs(venv_path):
 
 
 def test_create_environment_venv_path(venv_path):
+    print()
+    print(f"test_create_environment_venv_path({venv_path!r})")
     environment = create_environment(venv_path)
     assert environment.path == venv_path
 
 
 def test_create_environment_executable():
+    print()
+    print(f"sys.executable={sys.executable!r}")
     environment = create_environment(sys.executable)
     assert environment.executable == sys.executable
 

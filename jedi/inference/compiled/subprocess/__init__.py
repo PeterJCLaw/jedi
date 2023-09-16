@@ -47,6 +47,7 @@ def _GeneralizedPopen(*args, **kwargs):
 
 def _enqueue_output(out, queue_):
     for line in iter(out.readline, b''):
+        print(f"_enqueue_output: {line!r}")
         queue_.put(line)
 
 

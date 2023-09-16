@@ -5,9 +5,10 @@ jobs:
   tests:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-20.04, windows-2019]
-        python-version: ["3.12", "3.11", "3.10", "3.9", "3.8", "3.7", "3.6"]
+        python-version: ["3.12"]
         environment: ['3.8', '3.12', '3.11', '3.10', '3.9', '3.7', '3.6', 'interpreter']
     steps:
       - name: Checkout code
@@ -30,7 +31,7 @@ jobs:
         run: 'pip install .[testing]'
 
       - name: Run tests
-        run: python -m pytest
+        run: python -m pytest test/test_api/test_environment.py -v --capture=no
         env:
           JEDI_TEST_ENVIRONMENT: ${{ matrix.environment }}
 

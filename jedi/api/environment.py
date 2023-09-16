@@ -407,24 +407,33 @@ def _get_executables_from_windows_registry(version):
 
 
 def _assert_safe(executable_path, safe):
+    print()
+    print(f" _assert_safe({executable_path!r}, {safe!r})")
     if safe and not _is_safe(executable_path):
         raise InvalidPythonEnvironment(
             "The python binary is potentially unsafe.")
 
 
 def _is_safe(executable_path):
+    print(f" _is_safe({executable_path!r})")
+
     # Resolve sym links. A venv typically is a symlink to a known Python
     # binary. Only virtualenvs copy symlinks around.
     real_path = os.path.realpath(executable_path)
+    print(f" real_path={real_path!r}")
 
     if _is_unix_safe_simple(real_path):
+        print(" _is_unix_safe_simple(real_path) == True")
         return True
 
     # Just check the list of known Python versions. If it's not in there,
     # it's likely an attacker or some Python that was not properly
     # installed in the system.
-    for environment in find_system_environments():
+    envs = list(find_system_environments())
+    print(f"envs={envs!r}")
+    for environment in envs:
         if environment.executable == real_path:
+            print(" environment.executable == real_path")
             return True
 
         # If the versions don't match, just compare the binary files. If we
@@ -436,12 +445,14 @@ def _is_safe(executable_path):
         # upgraded), it will not work with Jedi. IMO that's fine, because
         # people should just be using venv. ~ dave
         if environment._sha256 == _calculate_sha256_for_file(real_path):
+            print(" environment._sha256 == _calculate_sha256_for_file(real_path)")
             return True
     return False
 
 
 def _is_unix_safe_simple(real_path):
     if _is_unix_admin():
+        print("   _is_unix_admin() == True")
         # In case we are root, just be conservative and
         # only execute known paths.
         return any(real_path.startswith(p) for p in _SAFE_PATHS)
@@ -456,6 +467,7 @@ def _is_unix_safe_simple(real_path):
     #    there's also a foobar/bin/activate.
     # 3. The attacker has gained code execution, since he controls
     #    foobar/bin/python.
+    print(f"   os.stat(real_path).st_uid: {uid!r}")
     return uid == 0
 
 
