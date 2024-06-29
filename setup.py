@@ -15,7 +15,7 @@ readme = open('README.rst').read() + '\n\n' + open('CHANGELOG.rst').read()
 
 assert os.path.isfile("jedi/third_party/typeshed/LICENSE"), \
     "Please download the typeshed submodule first (Hint: git submodule update --init)"
-assert os.path.isfile("jedi/third_party/django-stubs/LICENSE.txt"), \
+assert os.path.isfile("jedi/third_party/django-stubs/LICENSE.md"), \
     "Please download the django-stubs submodule first (Hint: git submodule update --init)"
 
 setup(name='jedi',
