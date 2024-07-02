@@ -31,8 +31,15 @@ jobs:
 
       - name: Run tests
         run: python -m pytest
+        if: ${{ !contains(matrix.environment, 'beta') }}
         env:
           JEDI_TEST_ENVIRONMENT: ${{ matrix.environment }}
+
+      - name: Run tests
+        run: python -m pytest
+        if: ${{ contains(matrix.environment, 'beta') }}
+        env:
+          JEDI_TEST_ENVIRONMENT: "3.13"
 
   code-quality:
     runs-on: ubuntu-20.04
